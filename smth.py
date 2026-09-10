@@ -47,6 +47,12 @@ print(results)
 
 df.to_csv('results_hand.csv',index=False)
 
+count = 0
+for index,row in results.iterrows():
+    if row['species'] == df['species'][index]:
+        count += 1
+print(str(count) + '/30')
+
 # new_df = pd.DataFrame(data_to_save,index=None)
 # new_df.to_csv('results_hands.csv',index=False,encoding='utf-8-sig')
 
