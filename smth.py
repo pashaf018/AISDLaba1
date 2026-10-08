@@ -1,8 +1,13 @@
 from random import random
 
 import pandas as pd
+import numpy as np
+from scipy.constants import metric_ton
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, precision_score
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import log_loss
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -72,21 +77,21 @@ for species,corrects,total in results_manually.itertuples():
 print("\t\tОбщая точность: " + str(results_by_class.values.sum()) + '/' + str(total_by_class.values.sum()))
 
 filename_manually = "test_data_manually.csv"
-test_data_manually.to_csv(filename_manually)
+test_data_manually.to_csv(filename_manually,index=False)
 print(test_data_manually)
 print("\033[32mСохранение в csv файл: " + filename_manually + "\033[0m")
 
 #Задание 3
 print("\n\033[38;5;166mЗадание 3: Обучить модель дерево решений(Попробовать разные значения параметра глубины дерева 3-5-7-??)."
-      "\nСохранить в csv файл")
+      "\nСохранить в csv файл\033[0m")
 
 depths = range(3,15,2)
 train_acc,test_acc =  [],[]
 train_prec,test_prec = [],[]
 
-X = df.drop(['species'])
+X = df.drop(columns=['species','prediction','is_correct'])
 Y = df['species']
-X_train,X_test,Y_train,Y_test = train_test_split(X,Y, shuffle=True,random_state=42)
+X_train,X_test,Y_train,Y_test = train_test_split(X,Y, shuffle=True,random_state=10)
 
 for d in depths:
     model = DecisionTreeClassifier(max_depth=d,random_state=42)
@@ -95,3 +100,123 @@ for d in depths:
     Y_train_pred = model.predict(X_train)
     Y_test_pred = model.predict(X_test)
 
+    train_acc.append(accuracy_score(Y_train,Y_train_pred))
+    train_prec.append(precision_score(Y_train,Y_train_pred,average='macro'))
+    test_acc.append(accuracy_score(Y_test, Y_test_pred))
+    test_prec.append(precision_score(Y_test, Y_test_pred, average='macro'))
+
+filename_DecisionTree = 'test_data_DecisionTree.csv'
+test_data_DecisionTree = pd.concat(objs=[X_test,pd.DataFrame({
+    'species': Y_test,
+    'prediction': Y_test_pred,
+    'is_correct': Y_test == Y_test_pred
+})],axis=1)
+print("\033[32mСохранение в csv файл: " + filename_DecisionTree + "\033[0m")
+test_data_DecisionTree.to_csv(filename_DecisionTree,index=False)
+
+_, (ax1,ax2) = plt.subplots(1,2,figsize=(14,5))
+
+ax1.plot(depths,train_acc,'o-',label='Train Accuracy')
+ax1.plot(depths,train_prec,'o--',label='Train Precision')
+ax1.set_xlabel("Глубина дерева")
+ax1.set_ylabel("Точность")
+ax1.set_title('Train')
+ax1.legend()
+ax1.grid(True)
+
+ax2.plot(depths,test_acc,'s-',label='Test Accuracy')
+ax2.plot(depths,test_prec,'s--',label='Test Precision')
+ax2.set_xlabel("Глубина дерева")
+ax2.set_ylabel("Точность")
+ax2.set_title('Test')
+ax2.legend()
+ax2.grid(True)
+
+plt.suptitle('Decision Tree')
+plt.tight_layout()
+plt.show()
+
+#Задание 4
+print("\n\033[38;5;166mЗадание 4: Обучить модель линейной регрессии(Попробовать разные значения итераций обучения 10,...100)."
+      "\nСохранить в csv файл\033[0m")
+
+losses_train, losses_test = [],[]
+train_acc_reg,test_acc_reg = [],[]
+train_prec_reg,test_prec_reg = [],[]
+l2_vec_norms = []
+l2_update_norms = []
+iterations = []
+
+prev_weights = None
+model_lr = LogisticRegression(C=1, solver='lbfgs', max_iter=10,warm_start=True,random_state=42)
+
+for i in range(30):
+    iterations.append((i + 1) * 10)
+    model_lr.fit(X_train,Y_train)
+
+    weights = model_lr.coef_[0]
+
+    l2_vec_norms.append(np.linalg.norm(weights))
+
+    if prev_weights is not None:
+        l2_update_norms.append(np.linalg.norm(weights - prev_weights))
+    else:
+        l2_update_norms.append(0)
+    prev_weights = weights.copy()
+
+    Y_pred_train = model_lr.predict(X_train)
+    Y_pred_test = model_lr.predict(X_test)
+    Y_proba_train = model_lr.predict_proba(X_train)
+    Y_proba_test = model_lr.predict_proba(X_test)
+
+    losses_train.append(log_loss(Y_train,Y_proba_train))
+    losses_test.append(log_loss(Y_test,Y_proba_test))
+    train_acc_reg.append(accuracy_score(Y_train,Y_pred_train))
+    test_acc_reg.append(accuracy_score(Y_test, Y_pred_test))
+    train_prec_reg.append(precision_score(Y_train,Y_pred_train,zero_division=0,average='macro'))
+    test_prec_reg.append(precision_score(Y_test, Y_pred_test, zero_division=0,average='macro'))
+
+    print(f"Итерация: {(i + 1) * 10}, train_acc = {train_acc_reg[-1]}, test_acc = {test_acc_reg[-1]}, l2 = {l2_vec_norms[-1]}, n_iter = {model_lr.n_iter_[0]}")
+
+_, axes = plt.subplots(2,3, figsize=(18,10))
+
+axes[0, 0].plot(iterations, losses_train, 'o-', label='Тренировочные потери')
+axes[0, 0].plot(iterations, losses_test, 's-', label='Тестовые потери')
+axes[0, 0].set_xlabel('Итерация')
+axes[0, 0].set_ylabel('Потери')
+axes[0, 0].set_title('График потерь')
+axes[0, 0].legend()
+axes[0, 0].grid(True)
+
+axes[0, 1].plot(iterations, train_acc_reg, 'o-', label='Train Accuracy')
+axes[0, 1].plot(iterations, test_acc_reg, 's-', label='Test Accuracy')
+axes[0, 1].set_xlabel('Итерация')
+axes[0, 1].set_ylabel('Accuracy')
+axes[0, 1].set_title('Точность')
+axes[0, 1].legend()
+axes[0, 1].grid(True)
+
+axes[0, 2].plot(iterations, train_prec_reg, 'o-', label='Train Precision')
+axes[0, 2].plot(iterations, test_prec_reg, 's-', label='Test Precision')
+axes[0, 2].set_xlabel('Итерация')
+axes[0, 2].set_ylabel('Precision')
+axes[0, 2].set_title('Precision')
+axes[0, 2].legend()
+axes[0, 2].grid(True)
+
+axes[1, 0].plot(iterations, l2_vec_norms, 'o-')
+axes[1, 0].set_xlabel('Итерация')
+axes[1, 0].set_ylabel('L2-норма')
+axes[1, 0].set_title('L2-норма вектора весов')
+axes[1, 0].grid(True)
+
+axes[1, 1].plot(iterations, l2_update_norms, 'o-')
+axes[1, 1].set_xlabel('Итерация')
+axes[1, 1].set_ylabel('Норма обновления')
+axes[1, 1].set_title('L2-норма изменения весов')
+axes[1, 1].grid(True)
+
+axes[1, 2].axis('off')
+
+plt.tight_layout()
+plt.show()
