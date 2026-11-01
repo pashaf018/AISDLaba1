@@ -150,6 +150,7 @@ iterations = []
 prev_weights = None
 model_lr = LogisticRegression(C=1, solver='lbfgs', max_iter=10,warm_start=True,random_state=42)
 
+Y_pred_test = []
 for i in range(30):
     iterations.append((i + 1) * 10)
     model_lr.fit(X_train,Y_train)
@@ -177,6 +178,15 @@ for i in range(30):
     test_prec_reg.append(precision_score(Y_test, Y_pred_test, zero_division=0,average='macro'))
 
     print(f"Итерация: {(i + 1) * 10}, train_acc = {train_acc_reg[-1]}, test_acc = {test_acc_reg[-1]}, l2 = {l2_vec_norms[-1]}, n_iter = {model_lr.n_iter_[0]}")
+
+filename_LinearRegression = 'test_data_LinearRegression.csv'
+test_data_LinearRegression = pd.concat(objs=[X_test,pd.DataFrame({
+    'species': Y_test,
+    'prediction': Y_pred_test,
+    'is_correct': Y_test == Y_pred_test
+})],axis=1)
+print("\033[32mСохранение в csv файл: " + filename_LinearRegression + "\033[0m")
+test_data_LinearRegression.to_csv(filename_LinearRegression,index=False)
 
 _, axes = plt.subplots(2,3, figsize=(18,10))
 
